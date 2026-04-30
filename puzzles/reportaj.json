@@ -19,22 +19,22 @@
     ["#", "#", "#", "#", "#", "#", "#", "#", "#", "#", "#", "#", "#", "#", "#"]
   ],
   "cluesAcross": {
-    "1": "Əlilliyi olan şəxslərin cəmiyyətə yenidən uyğunlaşma prosesi",
+    "4": "Əlilliyi olan şəxslərin cəmiyyətə yenidən uyğunlaşma prosesi",
     "6": "Eşitmə məhdudiyyəti olan şəxslərin əl hərəkəti ilə ünsiyyət forması",
     "7": "Bədənimizin ən vacib üzvü, yeriməyə kömək edən üzv"
   },
   "cluesDown": {
-    "1": "Gözlərimizlə gördüyümüz müxtəlif çalarlar",
-    "2": "İnsan hüquqlarını qoruyan şəxs və ya qurum",
-    "3": "Səsləri duyduğumuz hissiyatımız",
-    "4": "Pilləkənlərin yanında təkərli kürsülər üçün düzəldilən maili yol",
+    "1": "İnsan hüquqlarını qoruyan şəxs və ya qurum",
+    "2": "Səsləri duyduğumuz hissiyatımız",
+    "3": "Pilləkənlərin yanında təkərli kürsülər üçün düzəldilən maili yol",
+    "4": "Gözlərimizlə gördüyümüz müxtəlif çalarlar",
     "5": "Hər bir uşağın məktəbdə oxumaq və bilik almaq hüququ"
   },
   "numbers": {
-    "4,1": 1,
-    "2,4": 2,
-    "2,11": 3,
-    "3,13": 4,
+    "2,4": 1,
+    "2,11": 2,
+    "3,13": 3,
+    "4,1": 4,
     "4,8": 5,
     "7,6": 6,
     "9,2": 7
