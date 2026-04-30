@@ -42,6 +42,30 @@ socket.on('player_joined', (player) => {
 });
 
 socket.on('game_started', (data) => {
+  // Söz DÜZ tapılanda xanaları YAŞIL edib kilidləyir
+socket.on('word_correct', ({ wordIndexes }) => {
+  wordIndexes.forEach(idx => {
+    if (!lockedCells.includes(idx)) lockedCells.push(idx);
+    const el = document.querySelector(`[data-index="${idx}"] input`);
+    if (el) {
+      el.classList.remove('wrong');
+      el.classList.add('correct');
+      el.disabled = true;
+    }
+  });
+});
+
+// Söz SƏHV tapılanda xanaları 1 saniyəlik QIRMIZI edib titrədir
+socket.on('word_incorrect', ({ wordIndexes }) => {
+  wordIndexes.forEach(idx => {
+    const el = document.querySelector(`[data-index="${idx}"] input`);
+    // Əgər həmin xana başqa düz sözün xanası (yaşıl) deyilsə, qırmızı et
+    if (el && !lockedCells.includes(idx)) {
+      el.classList.add('wrong');
+      setTimeout(() => el.classList.remove('wrong'), 800); // 0.8 saniyə sonra qırmızını sil
+    }
+  });
+});
   puzzle = data.puzzle;
   cells = new Array(puzzle.width * puzzle.height).fill('');
   lockedCells = [];

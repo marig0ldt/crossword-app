@@ -177,3 +177,21 @@ h2, h3 { font-weight: 600; letter-spacing: -0.5px; }
   .admin-nav { flex-direction: column; gap: 1rem; text-align: center; }
   :root { --cell-size: min(35px, 9vw); }
 }
+/* Düz və Səhv xanaların dizaynı */
+.crossword-grid input.correct {
+  background-color: #2ecc71 !important;
+  color: white !important;
+  border-color: #27ae60 !important;
+}
+
+.crossword-grid input.wrong {
+  background-color: #e74c3c !important;
+  color: white !important;
+  animation: shake 0.4s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
