@@ -41,11 +41,9 @@ socket.on('player_joined', (player) => {
   addChat('system', `${player.username} qoşuldu 👋`);
 });
 
-socket.on('game_started', (data) => {socket.on('game_started', (data) => {
+socket.on('game_started', (data) => {
   puzzle = data.puzzle;
-  
-  // 🔴 Serverdən gələn totalWords-u götürürük
-  totalGameWords = data.totalWords || Object.keys(puzzle.cluesAcross || {}).length + Object.keys(puzzle.cluesDown || {}).length;
+  totalGameWords = data.totalWords || 0;
   
   cells = new Array(puzzle.width * puzzle.height).fill('');
   lockedCells = [];
@@ -53,14 +51,14 @@ socket.on('game_started', (data) => {socket.on('game_started', (data) => {
   renderGrid();
   renderClues();
   startTimer();
-  addChat('system', '🎮 Yarış başladı! Uğurlar!');
+  addChat('system', '🎮 Yarış başladı! İlk bitirən qalib olacaq!');
 
-  // Ekranda "0 / 0 söz" qalan yazıları avtomatik "0 / X söz" edirik
   document.querySelectorAll('.player-score').forEach(el => {
     el.textContent = `0 / ${totalGameWords} söz`;
   });
 });
-  // Söz DÜZ tapılanda xanaları YAŞIL edib kilidləyir
+
+// Söz düz tapılanda xanaları YAŞIL edir
 socket.on('word_correct', ({ wordIndexes }) => {
   wordIndexes.forEach(idx => {
     if (!lockedCells.includes(idx)) lockedCells.push(idx);
@@ -73,40 +71,17 @@ socket.on('word_correct', ({ wordIndexes }) => {
   });
 });
 
-// Söz SƏHV tapılanda xanaları 1 saniyəlik QIRMIZI edib titrədir
+// Söz səhv tapılanda xanaları QIRMIZI edir (0.8 saniyəlik)
 socket.on('word_incorrect', ({ wordIndexes }) => {
   wordIndexes.forEach(idx => {
     const el = document.querySelector(`[data-index="${idx}"] input`);
-    // Əgər həmin xana başqa düz sözün xanası (yaşıl) deyilsə, qırmızı et
     if (el && !lockedCells.includes(idx)) {
       el.classList.add('wrong');
-      setTimeout(() => el.classList.remove('wrong'), 800); // 0.8 saniyə sonra qırmızını sil
-    }
-  });
-});
-  puzzle = data.puzzle;
-  cells = new Array(puzzle.width * puzzle.height).fill('');
-  lockedCells = [];
-  showGame();
-  renderGrid();
-  renderClues();
-  startTimer();
-  addChat('system', '🎮 Yarış başladı! Uğurlar!');
-});
-
-// Söz düz tapılanda xanaları YAŞIL rəngə boyayır və kilidləyir
-socket.on('word_correct', ({ wordIndexes }) => {
-  wordIndexes.forEach(idx => {
-    if (!lockedCells.includes(idx)) lockedCells.push(idx);
-    const el = document.querySelector(`[data-index="${idx}"] input`);
-    if (el) {
-      el.classList.add('correct');
-      el.disabled = true; // Əllə silməyin qarşısını alırıq
+      setTimeout(() => el.classList.remove('wrong'), 800);
     }
   });
 });
 
-// Kənar paneldə oyunçunun neçə söz tapdığını real vaxtda göstərir
 socket.on('player_progress_update', ({ username: u, wordsFound, totalWords }) => {
   totalGameWords = totalWords;
   document.querySelectorAll('.player-item').forEach(el => {
@@ -190,9 +165,7 @@ function renderClues() {
 
 function selectCell(idx) {
   if (!puzzle) return;
-  // Əgər xana onsuz da düpdüzdürsə (yaşıldırsa), klikləyəndə istiqaməti dəyişə bilərik amma seçili qalmasın.
   selectedCell = idx;
-  
   document.querySelectorAll('.grid-cell').forEach(c => c.classList.remove('selected', 'highlighted'));
   const cell = document.querySelector(`[data-index="${idx}"]`);
   if (cell) cell.classList.add('selected');
@@ -234,7 +207,7 @@ function updateClueDisplay(idx) {
   const c = firstIdx % puzzle.width;
   
   const clueNum = puzzle.numbers[`${r},${c}`];
-  const clueText = direction === 'across' ? puzzle.cluesAcross[clueNum] : puzzle.cluesDown[clueNum];
+  const clueText = direction === 'across' ? (puzzle.cluesAcross||{})[clueNum] : (puzzle.cluesDown||{})[clueNum];
   
   document.getElementById('active-clue').textContent = clueNum ? `${clueNum}. ${clueText}` : 'İpucu yoxdur';
 }
@@ -247,18 +220,16 @@ function handleInput(e, idx) {
   e.target.value = letter;
   cells[idx] = letter;
 
-  // Bütün sözün xanalarını yoxlayaq görək tam doldurulubmu?
   const wordIndexes = getWordIndexes(idx, direction);
   let currentWord = '';
   let isFull = true;
   
   wordIndexes.forEach(i => {
-    const l = document.querySelector(`[data-index="${i}"] input`)?.value;
-    if (!l) isFull = false;
-    currentWord += l || ' ';
+    const el = document.querySelector(`[data-index="${i}"] input`);
+    if (!el || !el.value) isFull = false;
+    currentWord += (el ? el.value : ' ');
   });
 
-  // Əgər söz tam yazılıbsa, serverə yoxlamağa göndəririk
   if (isFull) {
     socket.emit('check_word', { wordIndexes, enteredWord: currentWord, direction });
   }
@@ -267,7 +238,7 @@ function handleInput(e, idx) {
 }
 
 function handleKeydown(e, idx) {
-  if (lockedCells.includes(idx) && e.key !== 'Tab') return; // Kilidlənibsə üstündə gəzməyə ehtiyac yoxdur
+  if (lockedCells.includes(idx) && e.key !== 'Tab') return; 
   
   const r = Math.floor(idx / puzzle.width);
   const c = idx % puzzle.width;
@@ -301,7 +272,7 @@ function movePrev(idx) {
 function moveToCell(r, c) {
   if (r < 0 || r >= puzzle.height || c < 0 || c >= puzzle.width) return;
   const idx = r * puzzle.width + c;
-  if (puzzle.grid[r][c] === '#' || lockedCells.includes(idx)) return; // Qara və ya yaşıl xanaya atlama
+  if (puzzle.grid[r][c] === '#' || lockedCells.includes(idx)) return; 
   selectCell(idx);
 }
 

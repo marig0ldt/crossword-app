@@ -17,7 +17,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
 const activeRooms = {}; 
-const playerProgress = {}; // Fərdi yarış yaddaşı: { roomId: { username: { cells: [], finishedWords: [] } } }
+const playerProgress = {}; 
+
+// 🔴 XƏTANIN HƏLLİ: Server hər açılanda asılı qalan (donan) otaqları sıfırlayır
+(async () => {
+  try { await db.run('UPDATE rooms SET status = "waiting"'); } catch(e){}
+})();
 
 function loadBuiltinPuzzles() {
   const dir = path.join(__dirname, 'puzzles');
@@ -67,13 +72,11 @@ app.get('/api/rooms', async (req, res) => {
     const rooms = await db.all('SELECT * FROM rooms ORDER BY created_at DESC');
     const result = [];
     for (const r of rooms) {
-      const players = await db.all('SELECT id, username, score, cells_filled FROM players WHERE room_id = ?', [r.id]);
+      const players = await db.all('SELECT id, username, score FROM players WHERE room_id = ?', [r.id]);
       result.push({ ...r, playerCount: players.length, inProgress: r.status === 'playing' });
     }
     res.json(result);
-  } catch (e) { 
-    res.status(500).json({ error: 'Datalar gətirilmədi' }); 
-  }
+  } catch (e) { res.status(500).json({ error: 'Datalar gətirilmədi' }); }
 });
 
 app.post('/api/player/rooms', async (req, res) => {
@@ -83,9 +86,7 @@ app.post('/api/player/rooms', async (req, res) => {
     const id = uuidv4().slice(0, 8).toUpperCase();
     await db.run('INSERT INTO rooms (id, name, puzzle_id, max_players) VALUES (?, ?, ?, ?)', [id, name, puzzleId, maxPlayers || 25]);
     res.json({ id, name, puzzleId });
-  } catch (e) {
-    res.status(500).json({ error: 'Otaq yaradılarkən xəta baş verdi' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Otaq yaradılarkən xəta baş verdi' }); }
 });
 
 app.post('/api/admin/login', async (req, res) => {
@@ -96,9 +97,7 @@ app.post('/api/admin/login', async (req, res) => {
       return res.status(401).json({ error: 'Yanlış istifadəçi adı və ya şifrə' });
     }
     res.json({ ok: true, username: admin.username, isSuper: admin.is_super === 1 });
-  } catch(e) {
-    res.status(500).json({ error: 'Daxil olarkən xəta baş verdi' });
-  }
+  } catch(e) { res.status(500).json({ error: 'Daxil olarkən xəta baş verdi' }); }
 });
 
 app.delete('/api/rooms/:id', adminAuth, async (req, res) => {
@@ -109,9 +108,7 @@ app.delete('/api/rooms/:id', adminAuth, async (req, res) => {
     delete activeRooms[req.params.id];
     delete playerProgress[req.params.id];
     res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Otağı silmək mümkün olmadı' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Otağı silmək mümkün olmadı' }); }
 });
 
 // ─── Helpers ───
@@ -121,27 +118,25 @@ function sanitizePuzzle(puzzle) {
 }
 
 async function startGameForRoom(roomId) {
-async function startGameForRoom(roomId) {
   try {
     const room = await db.get('SELECT * FROM rooms WHERE id = ?', [roomId]);
-    if (!room || room.status === 'playing') return;
+    if (!room) return;
 
     const puzzles = loadBuiltinPuzzles();
     const puzzle = puzzles.find(p => p.id === room.puzzle_id);
     if (!puzzle) return;
 
-    // Bütün sözlərin və xanaların ümumi sayını hesablayırıq
-    const totalWords = Object.keys(puzzle.cluesAcross || {}).length + Object.keys(puzzle.cluesDown || {}).length;
-    let totalCells = 0;
-    puzzle.grid.forEach(row => row.forEach(c => { if(c !== '#') totalCells++; }));
+    let totalWords = 0;
+    if (puzzle.cluesAcross) totalWords += Object.keys(puzzle.cluesAcross).length;
+    if (puzzle.cluesDown) totalWords += Object.keys(puzzle.cluesDown).length;
+    if (totalWords === 0 && puzzle.clues) totalWords = puzzle.clues.length;
 
     await db.run('DELETE FROM cell_states WHERE room_id = ?', [room.id]);
     await db.run('UPDATE rooms SET status = ? WHERE id = ?', ['playing', room.id]);
     await db.run('UPDATE players SET score = 0, cells_filled = 0 WHERE room_id = ?', [room.id]);
 
-    activeRooms[room.id] = { puzzle, totalWords, totalCells, startTime: Date.now(), status: 'playing' };
+    activeRooms[room.id] = { puzzle, totalWords, startTime: Date.now(), status: 'playing' };
 
-    // 🔴 ƏSAS HƏLL BURADADIR: Mövcud oyunçuların yaddaşını silmirik, sadəcə sıfırlayırıq
     if (!playerProgress[room.id]) playerProgress[room.id] = {};
     const players = await db.all('SELECT username FROM players WHERE room_id = ?', [room.id]);
     players.forEach(p => {
@@ -152,12 +147,8 @@ async function startGameForRoom(roomId) {
       };
     });
 
-    // totalWords-u da client-ə göndəririk ki "0 / 8 söz" görünsün
     io.to(room.id).emit('game_started', { puzzle: sanitizePuzzle(puzzle), totalWords });
-  } catch (e) {
-    console.error("Oyunu başladarkən xəta:", e);
-  }
-}
+  } catch (e) { console.error("Oyunu başladarkən xəta:", e); }
 }
 
 async function endGame(roomId, winnerUsername) {
@@ -174,9 +165,7 @@ async function endGame(roomId, winnerUsername) {
     const scores = await db.all('SELECT username, score FROM players WHERE room_id = ? ORDER BY score DESC', [roomId]);
     
     io.to(roomId).emit('game_over', { scores, winner: winnerUsername, time: `${m}:${s}` });
-  } catch(e) {
-    console.error("Oyunu bitirərkən xəta:", e);
-  }
+  } catch(e) { console.error("Oyunu bitirərkən xəta:", e); }
 }
 
 // ─── Socket.io ───
@@ -199,6 +188,15 @@ io.on('connection', (socket) => {
       socket.join(roomId);
       socket.data = { roomId, username, playerId };
 
+      // Söz sayını qabaqcadan hesablayırıq ki, 0/0 görünməsin
+      let roomTotalWords = 0;
+      const roomPuzzle = loadBuiltinPuzzles().find(p => p.id === room.puzzle_id);
+      if (roomPuzzle) {
+        if (roomPuzzle.cluesAcross) roomTotalWords += Object.keys(roomPuzzle.cluesAcross).length;
+        if (roomPuzzle.cluesDown) roomTotalWords += Object.keys(roomPuzzle.cluesDown).length;
+        if (roomTotalWords === 0 && roomPuzzle.clues) roomTotalWords = roomPuzzle.clues.length;
+      }
+
       const state = activeRooms[roomId];
       if (!playerProgress[roomId]) playerProgress[roomId] = {};
       if (!playerProgress[roomId][username]) {
@@ -218,12 +216,10 @@ io.on('connection', (socket) => {
         puzzle: state?.status === 'playing' ? sanitizePuzzle(state.puzzle) : null,
         cells: myProgress.cells,
         lockedCells: myProgress.lockedCells,
-        totalWords: state ? state.totalWords : 0
+        totalWords: state ? state.totalWords : roomTotalWords
       });
       socket.to(roomId).emit('player_joined', { id: playerId, username, score: existing ? existing.score : 0 });
-    } catch (e) {
-      console.error("Otağa qoşulma xətası:", e);
-    }
+    } catch (e) { console.error("Otağa qoşulma xətası:", e); }
   });
 
   socket.on('check_word', async ({ wordIndexes, enteredWord, direction }) => {
@@ -231,7 +227,9 @@ io.on('connection', (socket) => {
     const state = activeRooms[roomId];
     if (!state || state.status !== 'playing') return;
 
-    // Əsl həlli yoxlayırıq
+    const progress = playerProgress[roomId]?.[username];
+    if (!progress) return;
+
     let correctWord = '';
     wordIndexes.forEach(idx => {
       const r = Math.floor(idx / state.puzzle.width);
@@ -239,25 +237,26 @@ io.on('connection', (socket) => {
       correctWord += state.puzzle.grid[r][c];
     });
 
-    if (enteredWord.toUpperCase() === correctWord.toUpperCase()) {
-      const progress = playerProgress[roomId][username];
-      progress.correctWords += 1;
-      
-      // Həmin sözün xanalarını kilidlənmiş kimi qeyd edirik
-      wordIndexes.forEach(idx => {
-        if (!progress.lockedCells.includes(idx)) progress.lockedCells.push(idx);
-      });
+    // İ və I hərflərini bərabərləşdiririk ki, xəta çıxmasın
+    const normalize = (w) => (w || '').toUpperCase().replace(/İ/g, 'I').replace(/I/g, 'I').trim();
 
-      // Digər oyunçulara "Filankəs söz tapdı" statusunu göndəririk (sözü göstərmirik)
-      io.to(roomId).emit('player_progress_update', { username, wordsFound: progress.correctWords, totalWords: state.totalWords });
-      
-      // Bu oyunçuya "Söz düzdür, Yaşıl et!" əmri göndəririk
-      socket.emit('word_correct', { wordIndexes });
+    if (normalize(enteredWord) === normalize(correctWord)) {
+      const isAlreadyFound = wordIndexes.every(idx => progress.lockedCells.includes(idx));
+      if (!isAlreadyFound) {
+        progress.correctWords += 1;
+        wordIndexes.forEach(idx => {
+          if (!progress.lockedCells.includes(idx)) progress.lockedCells.push(idx);
+        });
 
-      // Əgər bütün sözləri tapıbsa - Qalibdir!
-      if (progress.correctWords >= state.totalWords) {
-        await endGame(roomId, username);
+        io.to(roomId).emit('player_progress_update', { username, wordsFound: progress.correctWords, totalWords: state.totalWords });
+        socket.emit('word_correct', { wordIndexes });
+
+        if (progress.correctWords >= state.totalWords) {
+          await endGame(roomId, username);
+        }
       }
+    } else {
+      socket.emit('word_incorrect', { wordIndexes });
     }
   });
 
@@ -271,6 +270,8 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// Front-end fayllarını göstərmək üçün
 app.get('/', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/game', (_, res) => res.sendFile(path.join(__dirname, 'public', 'game.html')));
 app.get('/admin', (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
