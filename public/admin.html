@@ -156,19 +156,37 @@ function showTab(name) {
 }
 
 async function loadRooms() {
-  const res = await fetch('/api/rooms');
-  const rooms = await res.json();
-  const el = document.getElementById('rooms-table');
-  if (!rooms.length) { el.innerHTML = '<div class="empty">Heç bir otaq mövcud deyil.</div>'; return; }
-  el.innerHTML = `<table class="data-table"><thead><tr><th>Kod</th><th>Otaq Adı</th><th>İştirakçı</th><th>Status</th><th>İdarəetmə</th></tr></thead><tbody>
-  ${rooms.map(r => `<tr>
-    <td><code>${r.id}</code></td><td>${r.name}</td><td>${r.playerCount}/${r.max_players}</td>
-    <td><span class="badge ${r.status==='playing'?'badge-green':'badge-blue'}">${r.status==='playing'?'Oyun Gedir':'Gözləyir'}</span></td>
-    <td class="actions">
-      ${r.status !== 'playing' ? `<button class="btn btn-sm btn-green" onclick="startGame('${r.id}')">Oyunu Başlat</button>` : `<button class="btn btn-sm btn-orange" onclick="endGame('${r.id}')">Oyunu Bitir</button>`}
-      <button class="btn btn-sm" onclick="showPlayers('${r.id}',${JSON.stringify(r.players).replace(/"/g,'&quot;')})">Siyahı</button>
-      <button class="btn btn-sm btn-red" style="background-color: #ff4d4d; color: white;" onclick="deleteRoom('${r.id}')">Sil</button>
-    </td></tr>`).join('')}</tbody></table>`;
+  try {
+    const res = await fetch('/api/rooms');
+    const rooms = await res.json();
+    const el = document.getElementById('rooms-table');
+    
+    if (!rooms || !rooms.length) { 
+      el.innerHTML = '<div class="empty">Heç bir otaq mövcud deyil.</div>'; 
+      return; 
+    }
+    
+    el.innerHTML = `<table class="data-table">
+      <thead>
+        <tr><th>Kod</th><th>Otaq Adı</th><th>İştirakçı</th><th>Status</th><th>İdarəetmə</th></tr>
+      </thead>
+      <tbody>
+      ${rooms.map(r => `<tr>
+        <td><code>${r.id}</code></td>
+        <td>${r.name}</td>
+        <td>${r.playerCount}/${r.max_players || 25}</td>
+        <td><span class="badge ${r.status === 'playing' ? 'badge-green' : 'badge-blue'}">${r.status === 'playing' ? 'Oyun Gedir' : 'Gözləyir'}</span></td>
+        <td class="actions">
+          ${r.status !== 'playing' ? `<button class="btn btn-sm btn-green" onclick="startGame('${r.id}')">Oyunu Başlat</button>` : `<button class="btn btn-sm btn-orange" onclick="endGame('${r.id}')">Oyunu Bitir</button>`}
+          <button class="btn btn-sm" onclick="showPlayers('${r.id}', ${JSON.stringify(r.players || []).replace(/"/g, '&quot;')})">Siyahı</button>
+          <button class="btn btn-sm btn-red" style="background-color: #ff4d4d; color: white;" onclick="deleteRoom('${r.id}')">Sil</button>
+        </td>
+      </tr>`).join('')}
+      </tbody>
+    </table>`;
+  } catch (err) {
+    console.error("Otaqları yükləyərkən xəta:", err);
+  }
 }
 
 async function createRoom() {
