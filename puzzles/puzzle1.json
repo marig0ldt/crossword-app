@@ -1,0 +1,33 @@
+{
+  "id": "puzzle1",
+  "title": "Meyvə və Tərəvəz",
+  "author": "Admin",
+  "width": 7,
+  "height": 7,
+  "grid": [
+    ["A","L","M","A","#","G","O"],
+    ["#","#","#","R","#","O","#"],
+    ["A","N","A","M","#","Z","#"],
+    ["#","A","#","U","D","#","#"],
+    ["#","R","#","T","#","#","#"],
+    ["#","#","#","#","#","#","#"],
+    ["K","I","W","I","#","U","Z"]
+  ],
+  "cluesAcross": {
+    "1": "Qırmızı meyvə (Alma)",
+    "6": "Yaşıl quş",
+    "8": "Ev sahibi qadın",
+    "13": "Tropik meyvə",
+    "16": "Mərkəzi Asiya şəhəri"
+  },
+  "cluesDown": {
+    "1": "Şəkillər yaradan sənətkar",
+    "4": "Bəhrə, yemiş",
+    "6": "Günəş işığından ibarət şey",
+    "9": "Günorta yeməyi"
+  },
+  "numbers": {
+    "0,0":1,"0,5":6,"2,0":8,"6,0":13,"6,5":16,
+    "0,3":4,"0,6":7
+  }
+}

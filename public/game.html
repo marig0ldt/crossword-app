@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Krossword Oyunu</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="game-page">
+<div class="game-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <a href="/" class="back-link">← Ana Səhifə</a>
+      <h3 id="room-name">Otaq</h3>
+      <span id="room-id-badge" class="room-code"></span>
+    </div>
+    <div class="game-status-bar">
+      <span id="status-badge" class="badge badge-blue">Gözləyir...</span>
+      <span id="timer" style="display:none">00:00</span>
+    </div>
+    <div class="players-panel">
+      <h4>İştirakçılar <span id="player-count">(0)</span></h4>
+      <div id="players-list"></div>
+    </div>
+    <div class="clue-panel">
+      <h4>Aktiv İpucu</h4>
+      <div id="active-clue" class="active-clue">Hücrəyə klikləyin</div>
+    </div>
+    <div class="chat-panel">
+      <h4>Söhbət</h4>
+      <div id="chat-messages" class="chat-messages"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Mesaj yazın..." maxlength="200">
+        <button onclick="sendChat()">Göndər</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="game-main">
+    <div id="waiting-screen" class="center-screen">
+      <div class="waiting-card">
+        <button class="btn btn-primary" style="margin-top:20px; width:100%" onclick="playerStartGame()">Mən Başlatmaq İstəyirəm (Admin yoxdursa)</button>
+        <div class="spinner"></div>
+        <h2>Oyunun başlaması gözlənilir</h2>
+        <p>Admin oyunu başlatdıqda ekran avtomatik açılacaq.</p>
+      </div>
+    </div>
+
+    <div id="game-screen" style="display:none">
+      <div class="puzzle-title">
+        <h2 id="puzzle-title">Krossword</h2>
+        <div class="clues-toggle">
+          <button class="btn btn-sm active" id="btn-across" onclick="setDir('across')">→ Üfüqi</button>
+          <button class="btn btn-sm" id="btn-down" onclick="setDir('down')">↓ Şaquli</button>
+        </div>
+      </div>
+      <div id="crossword-grid" class="crossword-grid"></div>
+      
+      <div class="clues-section">
+        <div class="clues-col">
+          <h4>→ Üfüqi Sözlər</h4>
+          <div id="clues-across" class="clues-list"></div>
+        </div>
+        <div class="clues-col">
+          <h4>↓ Şaquli Sözlər</h4>
+          <div id="clues-down" class="clues-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="gameover-screen" style="display:none" class="center-screen">
+      <div class="gameover-card">
+        <h2>Oyun Başa Çatdı!</h2>
+        <div id="final-scores" class="scores-list"></div>
+        <button class="btn btn-primary" onclick="window.location.href='/'">Lobbiyə Qayıt</button>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

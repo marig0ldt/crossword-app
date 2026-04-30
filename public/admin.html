@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Panel - Krossword</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="admin-page">
+
+<div id="login-screen" class="login-container">
+  <div class="login-card">
+    <h1>İdarəetmə Paneli</h1>
+    <div class="form-group">
+      <label>İstifadəçi Adı</label>
+      <input type="text" id="admin-user" placeholder="admin">
+    </div>
+    <div class="form-group">
+      <label>Şifrə</label>
+      <input type="password" id="admin-pass" placeholder="••••••••">
+    </div>
+    <button class="btn btn-primary btn-large" onclick="adminLogin()">Daxil Ol</button>
+    <div id="login-error" class="error-msg" style="display:none"></div>
+  </div>
+</div>
+
+<div id="admin-dashboard" style="display:none" class="admin-layout">
+  <nav class="admin-nav">
+    <h1>Krossword Admin</h1>
+    <span id="admin-badge"></span>
+    <div class="nav-links">
+      <button class="nav-btn active" onclick="showTab('rooms')">Otaqlar</button>
+      <button class="nav-btn" onclick="showTab('puzzles')">Tapmacalar</button>
+      <button class="nav-btn" onclick="showTab('admins')">Adminlər</button>
+    </div>
+    <button class="btn btn-outline" onclick="logout()">Sistemdən Çıx</button>
+  </nav>
+
+  <div id="tab-rooms" class="tab-content active">
+    <div class="tab-header">
+      <h2>Otaq İdarəetməsi</h2>
+      <button class="btn btn-primary" onclick="showCreateRoom()">Yeni Otaq Yarat</button>
+    </div>
+    <div id="create-room-form" class="card" style="display:none">
+      <h3>Yeni Oyun Otağı</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Otağın Adı</label>
+          <input type="text" id="new-room-name" placeholder="Məsələn: Turnir #1">
+        </div>
+        <div class="form-group">
+          <label>Krossword Seçimi</label>
+          <select id="new-room-puzzle"></select>
+        </div>
+        <div class="form-group">
+          <label>Maksimum İştirakçı (2-25)</label>
+          <input type="number" id="new-room-max" value="25" min="2" max="25">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="createRoom()">Yarat</button>
+        <button class="btn btn-outline" onclick="document.getElementById('create-room-form').style.display='none'">Ləğv Et</button>
+      </div>
+    </div>
+    <div id="rooms-table" class="rooms-table"></div>
+  </div>
+
+  <div id="tab-puzzles" class="tab-content">
+    <div class="tab-header">
+      <h2>Mövcud Tapmacalar</h2>
+      <label class="btn btn-primary" style="cursor:pointer">
+        .puz Faylı Yüklə
+        <input type="file" accept=".puz" style="display:none" onchange="uploadPuz(this)">
+      </label>
+    </div>
+    <div id="puzzles-table" class="puzzles-table"></div>
+  </div>
+
+  <div id="tab-admins" class="tab-content">
+    <div class="tab-header">
+      <h2>Admin Siyahısı</h2>
+      <button class="btn btn-primary" onclick="showAddAdmin()">Admin Əlavə Et</button>
+    </div>
+    <div id="add-admin-form" class="card" style="display:none">
+      <h3>Yeni Admin</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>İstifadəçi Adı</label>
+          <input type="text" id="new-admin-user" placeholder="İstifadəçi adı">
+        </div>
+        <div class="form-group">
+          <label>Şifrə</label>
+          <input type="password" id="new-admin-pass" placeholder="Şifrə">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="addAdmin()">Təsdiqlə</button>
+        <button class="btn btn-outline" onclick="document.getElementById('add-admin-form').style.display='none'">Ləğv Et</button>
+      </div>
+    </div>
+    <div id="admins-table" class="admins-table"></div>
+  </div>
+</div>
+
+<script>
+let adminUser = sessionStorage.getItem('adminUser') || '';
+let adminPass = sessionStorage.getItem('adminPass') || '';
+
+function getHeaders() { return { 'Content-Type': 'application/json', 'username': adminUser, 'password': adminPass }; }
+
+window.onload = () => {
+  if (adminUser && adminPass) {
+    document.getElementById('admin-user').value = adminUser;
+    document.getElementById('admin-pass').value = adminPass;
+    adminLogin();
+  }
+};
+
+async function adminLogin() {
+  adminUser = document.getElementById('admin-user').value;
+  adminPass = document.getElementById('admin-pass').value;
+  const res = await fetch('/api/admin/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: adminUser, password: adminPass })
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    document.getElementById('login-error').textContent = data.error;
+    document.getElementById('login-error').style.display = 'block';
+    return;
+  }
+  sessionStorage.setItem('adminUser', adminUser);
+  sessionStorage.setItem('adminPass', adminPass);
+  
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('admin-dashboard').style.display = 'block';
+  document.getElementById('admin-badge').textContent = `Səlahiyyətli: ${adminUser}`;
+  
+  await loadPuzzles();
+  loadRooms(); 
+  loadAdmins();
+}
+
+function logout() {
+  sessionStorage.clear();
+  adminUser = ''; adminPass = '';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('admin-dashboard').style.display = 'none';
+}
+
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  event.target.classList.add('active');
+}
+
+async function loadRooms() {
+  const res = await fetch('/api/rooms');
+  const rooms = await res.json();
+  const el = document.getElementById('rooms-table');
+  if (!rooms.length) { el.innerHTML = '<div class="empty">Heç bir otaq mövcud deyil.</div>'; return; }
+  el.innerHTML = `<table class="data-table"><thead><tr><th>Kod</th><th>Otaq Adı</th><th>İştirakçı</th><th>Status</th><th>İdarəetmə</th></tr></thead><tbody>
+  ${rooms.map(r => `<tr>
+    <td><code>${r.id}</code></td><td>${r.name}</td><td>${r.playerCount}/${r.max_players}</td>
+    <td><span class="badge ${r.status==='playing'?'badge-green':'badge-blue'}">${r.status==='playing'?'Oyun Gedir':'Gözləyir'}</span></td>
+    <td class="actions">
+      ${r.status !== 'playing' ? `<button class="btn btn-sm btn-green" onclick="startGame('${r.id}')">Oyunu Başlat</button>` : `<button class="btn btn-sm btn-orange" onclick="endGame('${r.id}')">Oyunu Bitir</button>`}
+      <button class="btn btn-sm" onclick="showPlayers('${r.id}',${JSON.stringify(r.players).replace(/"/g,'&quot;')})">Siyahı</button>
+      <button class="btn btn-sm btn-red" onclick="deleteRoom('${r.id}')">Sil</button>
+    </td></tr>`).join('')}</tbody></table>`;
+}
+
+async function createRoom() {
+  const name = document.getElementById('new-room-name').value.trim();
+  const puzzleId = document.getElementById('new-room-puzzle').value;
+  const maxPlayers = document.getElementById('new-room-max').value;
+  if (!name || !puzzleId) return alert('Otaq adını və tapmacanı mütləq seçin!');
+  
+  const res = await fetch('/api/rooms', { method: 'POST', headers: getHeaders(), body: JSON.stringify({ name, puzzleId, maxPlayers }) });
+  const data = await res.json();
+  if (!res.ok) return alert(data.error);
+  
+  alert(`Otaq yaradıldı! Kod: ${data.id}`);
+  document.getElementById('create-room-form').style.display = 'none';
+  loadRooms();
+}
+
+async function startGame(id) {
+  if (!confirm('Oyunu başlatmaq istəyirsiniz? Bütün oyunçulara ekran açılacaq.')) return;
+  const res = await fetch(`/api/rooms/${id}/start`, { method: 'POST', headers: getHeaders() });
+  if (!res.ok) { const d = await res.json(); return alert(d.error); }
+  loadRooms();
+}
+
+async function endGame(id) {
+  if (!confirm('Oyunu məcburi bitirmək istəyirsiniz?')) return;
+  await fetch(`/api/rooms/${id}/end`, { method: 'POST', headers: getHeaders() });
+  loadRooms();
+}
+
+async function deleteRoom(id) {
+  if (!confirm('Otağı silmək istəyirsiniz? Bütün iştirakçılar xaric ediləcək.')) return;
+  await fetch(`/api/rooms/${id}`, { method: 'DELETE', headers: getHeaders() });
+  loadRooms();
+}
+
+function showCreateRoom() { document.getElementById('create-room-form').style.display = 'block'; }
+
+async function loadPuzzles() {
+  const res = await fetch('/api/puzzles');
+  const puzzles = await res.json();
+  
+  // Update Dropdown for room creation
+  const sel = document.getElementById('new-room-puzzle');
+  sel.innerHTML = puzzles.map(p => `<option value="${p.id}">${p.title}</option>`).join('');
+  
+  // Update Table
+  const el = document.getElementById('puzzles-table');
+  el.innerHTML = `<table class="data-table"><thead><tr><th>ID</th><th>Başlıq</th><th>Müəllif</th><th>Ölçü</th></tr></thead><tbody>
+  ${puzzles.map(p => `<tr><td><code>${p.id}</code></td><td>${p.title}</td><td>${p.author || '-'}</td><td>${p.width}×${p.height}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function showPlayers(roomId, players) {
+  const html = players.length ? players.map(p =>
+    `<div class="player-row" style="margin-bottom:10px; padding:10px; background:#f0f0f0; color:#000;">
+      <strong>${p.username}</strong> — ${p.score} xal
+      <button style="float:right; color:red;" onclick="kickPlayer('${roomId}','${p.id}')">Çıxar</button>
+    </div>`
+  ).join('') : '<p>Heç kim qoşulmayıb.</p>';
+  const win = window.open('', '_blank', 'width=400,height=400');
+  win.document.write(`<html lang="az"><body style="font-family:sans-serif;padding:20px;"><h3>İştirakçılar</h3>${html}</body></html>`);
+}
+
+async function kickPlayer(roomId, playerId) {
+  await fetch(`/api/rooms/${roomId}/kick/${playerId}`, { method: 'POST', headers: getHeaders() });
+}
+
+async function uploadPuz(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const buf = await file.arrayBuffer();
+  const res = await fetch('/api/puzzles/upload', {
+    method: 'POST', headers: { ...getHeaders(), 'Content-Type': 'application/octet-stream', 'x-puzzle-name': file.name }, body: buf
+  });
+  if (!res.ok) return alert('Xəta baş verdi');
+  alert(`Fayl yükləndi!`); loadPuzzles();
+}
+
+async function loadAdmins() {
+  const res = await fetch('/api/admins', { headers: getHeaders() });
+  const admins = await res.json();
+  const el = document.getElementById('admins-table');
+  el.innerHTML = `<table class="data-table"><thead><tr><th>İstifadəçi</th><th>Rol</th><th>Tarix</th><th>İdarə</th></tr></thead><tbody>
+  ${admins.map(a => `<tr><td>${a.username}</td><td>${a.is_super ? 'Əsas Admin' : 'Admin'}</td><td>${new Date(a.created_at).toLocaleDateString('az-AZ')}</td>
+  <td>${!a.is_super ? `<button class="btn btn-sm btn-red" onclick="removeAdmin('${a.username}')">Sil</button>` : '-'}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function showAddAdmin() { document.getElementById('add-admin-form').style.display = 'block'; }
+
+async function addAdmin() {
+  const username = document.getElementById('new-admin-user').value.trim();
+  const password = document.getElementById('new-admin-pass').value;
+  if (!username || !password) return alert('Məlumatları doldurun');
+  const res = await fetch('/api/admins', { method: 'POST', headers: getHeaders(), body: JSON.stringify({ username, password }) });
+  if (!res.ok) return alert('Xəta');
+  alert('Admin əlavə edildi!');
+  document.getElementById('add-admin-form').style.display = 'none';
+  loadAdmins();
+}
+
+async function removeAdmin(username) {
+  if (!confirm(`"${username}" adminini silmək istəyirsiniz?`)) return;
+  await fetch(`/api/admins/${username}`, { method: 'DELETE', headers: getHeaders() });
+  loadAdmins();
+}
+
+document.getElementById('admin-pass').addEventListener('keypress', e => { if (e.key === 'Enter') adminLogin(); });
+</script>
+</body>
+</html>

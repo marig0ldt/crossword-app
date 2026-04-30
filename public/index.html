@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Krossword Platforması</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="lobby-page">
+<div class="lobby-container" style="max-width: 800px;">
+  <header class="lobby-header">
+    <h1>Krossword</h1>
+    <p>Real-time Çoxoyunçulu Krossword Oyunu</p>
+  </header>
+  
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
+    <!-- Otağa Qoşul Kartı -->
+    <div class="lobby-card" id="join-form" style="margin-bottom: 0;">
+      <h2>Otağa Qoşul</h2>
+      <div class="form-group">
+        <label>İstifadəçi Adı</label>
+        <input type="text" id="username-join" placeholder="Adınızı daxil edin..." maxlength="20">
+      </div>
+      <div class="form-group">
+        <label>Otaq Kodu</label>
+        <input type="text" id="room-code" placeholder="Məsələn: A1B2C3D4" maxlength="8" style="text-transform:uppercase">
+      </div>
+      <button class="btn btn-primary btn-large" onclick="joinRoom()">Oyuna Daxil Ol →</button>
+      <div id="join-error" class="error-msg" style="display:none"></div>
+    </div>
+
+    <!-- Yeni Otaq Yarat Kartı -->
+    <div class="lobby-card" id="create-form" style="margin-bottom: 0; border-color: var(--accent);">
+      <h2>Öz Otağını Yarat</h2>
+      <div class="form-group">
+        <label>İstifadəçi Adı (Sənin Adın)</label>
+        <input type="text" id="username-create" placeholder="Adınızı daxil edin..." maxlength="20">
+      </div>
+      <div class="form-group">
+        <label>Otağın Adı</label>
+        <input type="text" id="new-room-name" placeholder="Məsələn: Dostlarla Yarış">
+      </div>
+      <div class="form-group">
+        <label>Krossword Seç</label>
+        <select id="new-room-puzzle">
+          <option value="">Yüklənir...</option>
+        </select>
+      </div>
+      <button class="btn btn-green btn-large" onclick="createPlayerRoom()">Yarat və Daxil Ol 🎮</button>
+      <div id="create-error" class="error-msg" style="display:none"></div>
+    </div>
+  </div>
+
+  <div class="rooms-section" style="margin-top: 3rem;">
+    <div class="rooms-header">
+      <h2>Aktiv Otaqlar</h2>
+      <button class="btn btn-outline btn-sm" onclick="loadRooms()">Yenilə</button>
+    </div>
+    <div id="rooms-list" class="rooms-list">
+      <div class="loading">Otaqlar yoxlanılır...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadPuzzles() {
+  try {
+    const res = await fetch('/api/puzzles');
+    const puzzles = await res.json();
+    const sel = document.getElementById('new-room-puzzle');
+    sel.innerHTML = puzzles.map(p => `<option value="${p.id}">${p.title} (${p.width}x${p.height})</option>`).join('');
+  } catch (e) {
+    console.error("Tapmacalar yüklənmədi", e);
+  }
+}
+
+async function loadRooms() {
+  const list = document.getElementById('rooms-list');
+  list.innerHTML = '<div class="loading">Yüklənir...</div>';
+  try {
+    const res = await fetch('/api/rooms');
+    const rooms = await res.json();
+    if (!rooms.length) { list.innerHTML = '<div class="empty">Hazırda aktiv otaq yoxdur. Öz otağınızı yaradın!</div>'; return; }
+    list.innerHTML = rooms.map(r => `
+      <div class="room-card ${r.status === 'playing' ? 'playing' : ''}">
+        <div class="room-info">
+          <strong>${r.name}</strong>
+          <span class="room-code">${r.id}</span>
+        </div>
+        <div class="room-meta">
+          <span class="badge ${r.status === 'playing' ? 'badge-green' : 'badge-blue'}">
+            ${r.status === 'playing' ? 'Oyun Gedir' : 'Gözləyir'}
+          </span>
+          <span class="player-count">İştirakçı: ${r.playerCount}/${r.max_players}</span>
+        </div>
+        <button class="btn btn-sm" onclick="document.getElementById('room-code').value='${r.id}'; document.getElementById('username-join').focus();">Seç</button>
+      </div>
+    `).join('');
+  } catch { list.innerHTML = '<div class="error-msg">Serverlə əlaqə kəsildi.</div>'; }
+}
+
+async function createPlayerRoom() {
+  const username = document.getElementById('username-create').value.trim();
+  const roomName = document.getElementById('new-room-name').value.trim();
+  const puzzleId = document.getElementById('new-room-puzzle').value;
+  const errEl = document.getElementById('create-error');
+  
+  if (!username) { errEl.textContent = 'Adınızı yazın.'; errEl.style.display = 'block'; return; }
+  if (!roomName) { errEl.textContent = 'Otağa ad verin.'; errEl.style.display = 'block'; return; }
+  if (!puzzleId) { errEl.textContent = 'Tapmaca seçin.'; errEl.style.display = 'block'; return; }
+
+  try {
+    const res = await fetch('/api/player/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: roomName, puzzleId: puzzleId })
+    });
+    
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+
+    // Otaq yaradıldı, birbaşa oyuna yönləndiririk
+    sessionStorage.setItem('cw_username', username);
+    sessionStorage.setItem('cw_room', data.id);
+    window.location.href = `/game?room=${data.id}&user=${encodeURIComponent(username)}`;
+  } catch (e) {
+    errEl.textContent = 'Sistem xətası baş verdi.'; errEl.style.display = 'block';
+  }
+}
+
+async function joinRoom() {
+  const username = document.getElementById('username-join').value.trim();
+  const roomCode = document.getElementById('room-code').value.trim().toUpperCase();
+  const errEl = document.getElementById('join-error');
+  
+  if (!username) { errEl.textContent = 'İstifadəçi adınızı yazın.'; errEl.style.display = 'block'; return; }
+  if (!roomCode) { errEl.textContent = 'Otaq kodunu daxil edin.'; errEl.style.display = 'block'; return; }
+
+  try {
+    const res = await fetch('/api/rooms');
+    const rooms = await res.json();
+    const targetRoom = rooms.find(r => r.id === roomCode);
+
+    if (!targetRoom) { errEl.textContent = 'Səhv kod! Belə bir otaq mövcud deyil.'; errEl.style.display = 'block'; return; }
+    if (targetRoom.status === 'finished') { errEl.textContent = 'Bu otaqda oyun artıq başa çatıb.'; errEl.style.display = 'block'; return; }
+    if (targetRoom.playerCount >= targetRoom.max_players) { errEl.textContent = 'Otaqda boş yer yoxdur.'; errEl.style.display = 'block'; return; }
+
+    sessionStorage.setItem('cw_username', username);
+    sessionStorage.setItem('cw_room', roomCode);
+    window.location.href = `/game?room=${roomCode}&user=${encodeURIComponent(username)}`;
+  } catch {
+    errEl.textContent = 'Sistem xətası baş verdi.'; errEl.style.display = 'block';
+  }
+}
+
+// Səhifə yüklənəndə dataları gətir
+document.getElementById('username-join').value = sessionStorage.getItem('cw_username') || '';
+document.getElementById('username-create').value = sessionStorage.getItem('cw_username') || '';
+loadPuzzles();
+loadRooms();
+setInterval(loadRooms, 10000);
+</script>
+</body>
+</html>
