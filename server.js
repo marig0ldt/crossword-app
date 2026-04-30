@@ -121,6 +121,7 @@ function sanitizePuzzle(puzzle) {
 }
 
 async function startGameForRoom(roomId) {
+async function startGameForRoom(roomId) {
   try {
     const room = await db.get('SELECT * FROM rooms WHERE id = ?', [roomId]);
     if (!room || room.status === 'playing') return;
@@ -139,12 +140,24 @@ async function startGameForRoom(roomId) {
     await db.run('UPDATE players SET score = 0, cells_filled = 0 WHERE room_id = ?', [room.id]);
 
     activeRooms[room.id] = { puzzle, totalWords, totalCells, startTime: Date.now(), status: 'playing' };
-    playerProgress[room.id] = {}; // Hər kəs üçün fərdi progress yaradırıq
 
-    io.to(room.id).emit('game_started', { puzzle: sanitizePuzzle(puzzle) });
+    // 🔴 ƏSAS HƏLL BURADADIR: Mövcud oyunçuların yaddaşını silmirik, sadəcə sıfırlayırıq
+    if (!playerProgress[room.id]) playerProgress[room.id] = {};
+    const players = await db.all('SELECT username FROM players WHERE room_id = ?', [room.id]);
+    players.forEach(p => {
+      playerProgress[room.id][p.username] = {
+        cells: new Array(puzzle.width * puzzle.height).fill(''),
+        correctWords: 0,
+        lockedCells: []
+      };
+    });
+
+    // totalWords-u da client-ə göndəririk ki "0 / 8 söz" görünsün
+    io.to(room.id).emit('game_started', { puzzle: sanitizePuzzle(puzzle), totalWords });
   } catch (e) {
     console.error("Oyunu başladarkən xəta:", e);
   }
+}
 }
 
 async function endGame(roomId, winnerUsername) {

@@ -41,7 +41,25 @@ socket.on('player_joined', (player) => {
   addChat('system', `${player.username} qoşuldu 👋`);
 });
 
-socket.on('game_started', (data) => {
+socket.on('game_started', (data) => {socket.on('game_started', (data) => {
+  puzzle = data.puzzle;
+  
+  // 🔴 Serverdən gələn totalWords-u götürürük
+  totalGameWords = data.totalWords || Object.keys(puzzle.cluesAcross || {}).length + Object.keys(puzzle.cluesDown || {}).length;
+  
+  cells = new Array(puzzle.width * puzzle.height).fill('');
+  lockedCells = [];
+  showGame();
+  renderGrid();
+  renderClues();
+  startTimer();
+  addChat('system', '🎮 Yarış başladı! Uğurlar!');
+
+  // Ekranda "0 / 0 söz" qalan yazıları avtomatik "0 / X söz" edirik
+  document.querySelectorAll('.player-score').forEach(el => {
+    el.textContent = `0 / ${totalGameWords} söz`;
+  });
+});
   // Söz DÜZ tapılanda xanaları YAŞIL edib kilidləyir
 socket.on('word_correct', ({ wordIndexes }) => {
   wordIndexes.forEach(idx => {
