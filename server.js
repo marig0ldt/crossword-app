@@ -210,7 +210,8 @@ app.get('/', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html
 app.get('/game', (_, res) => res.sendFile(path.join(__dirname, 'public', 'game.html')));
 app.get('/admin', (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
+const PORT = process.env.PORT || 3000; // Bu sətir çox vacibdir!
+
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`\n🚀 Krossword serveri internetə açıldı!`);
-  console.log(`📡 Port: ${PORT}`);
+  console.log(`🚀 Server onlayndır: ${PORT}`);
 });
