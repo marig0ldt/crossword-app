@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Krossword Oyunu</title>
+<title>Krossword Yarışı</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="game-page">
@@ -14,18 +14,24 @@
       <h3 id="room-name">Otaq</h3>
       <span id="room-id-badge" class="room-code"></span>
     </div>
-    <div class="game-status-bar">
+    
+    <!-- TAYMER VƏ STATUS BURADADIR -->
+    <div class="game-status-bar" style="display: flex; justify-content: space-between; align-items: center; background: #222; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
       <span id="status-badge" class="badge badge-blue">Gözləyir...</span>
-      <span id="timer" style="display:none">00:00</span>
+      <span id="timer" style="font-size: 20px; font-weight: bold; color: #00ff88; display: none;">00:00</span>
     </div>
+
     <div class="players-panel">
       <h4>İştirakçılar <span id="player-count">(0)</span></h4>
+      <!-- Oyunçuların vaxtı və xalı burada görünəcək -->
       <div id="players-list"></div>
     </div>
+    
     <div class="clue-panel">
       <h4>Aktiv İpucu</h4>
       <div id="active-clue" class="active-clue">Hücrəyə klikləyin</div>
     </div>
+    
     <div class="chat-panel">
       <h4>Söhbət</h4>
       <div id="chat-messages" class="chat-messages"></div>
@@ -42,7 +48,7 @@
         <button class="btn btn-primary" style="margin-top:20px; width:100%" onclick="playerStartGame()">Mən Başlatmaq İstəyirəm (Admin yoxdursa)</button>
         <div class="spinner"></div>
         <h2>Oyunun başlaması gözlənilir</h2>
-        <p>Admin oyunu başlatdıqda ekran avtomatik açılacaq.</p>
+        <p>Hər kəsə fərdi cədvəl veriləcək. İlk bitirən qalibdir!</p>
       </div>
     </div>
 

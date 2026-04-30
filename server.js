@@ -15,10 +15,9 @@ const io = new Server(server, { cors: { origin: '*' } });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 🔴 DİQQƏT: Railway-in serveri görə bilməsi üçün ən vacib hissə:
 const PORT = process.env.PORT || 3000;
-const MAX_PLAYERS_PER_ROOM = 25;
 const activeRooms = {}; 
+const playerProgress = {}; // Fərdi yarış yaddaşı: { roomId: { username: { cells: [], finishedWords: [] } } }
 
 function loadBuiltinPuzzles() {
   const dir = path.join(__dirname, 'puzzles');
@@ -39,7 +38,7 @@ function loadBuiltinPuzzles() {
   return puzzles;
 }
 
-// ─── Middleware ───────────────────────────────────────────────────────────────
+// ─── Middleware ───
 async function adminAuth(req, res, next) {
   const { username, password } = req.headers;
   if (!username || !password) return res.status(401).json({ error: 'Giriş tələb olunur' });
@@ -51,12 +50,11 @@ async function adminAuth(req, res, next) {
     req.admin = admin;
     next();
   } catch (e) { 
-    console.error("Admin Auth xətası:", e);
     res.status(500).json({ error: 'Server xətası' }); 
   }
 }
 
-// ─── API ──────────────────────────────────────────────────────────────────────
+// ─── API ───
 app.get('/api/puzzles', (req, res) => {
   const puzzles = loadBuiltinPuzzles().map(p => ({
     id: p.id, title: p.title, author: p.author, width: p.width, height: p.height
@@ -74,20 +72,18 @@ app.get('/api/rooms', async (req, res) => {
     }
     res.json(result);
   } catch (e) { 
-    console.error(e);
     res.status(500).json({ error: 'Datalar gətirilmədi' }); 
   }
 });
 
 app.post('/api/player/rooms', async (req, res) => {
   try {
-    const { name, puzzleId } = req.body;
+    const { name, puzzleId, maxPlayers } = req.body;
     if (!name || !puzzleId) return res.status(400).json({ error: 'Ad və tapmaca tələb olunur' });
     const id = uuidv4().slice(0, 8).toUpperCase();
-    await db.run('INSERT INTO rooms (id, name, puzzle_id, max_players) VALUES (?, ?, ?, ?)', [id, name, puzzleId, 25]);
+    await db.run('INSERT INTO rooms (id, name, puzzle_id, max_players) VALUES (?, ?, ?, ?)', [id, name, puzzleId, maxPlayers || 25]);
     res.json({ id, name, puzzleId });
   } catch (e) {
-    console.error(e);
     res.status(500).json({ error: 'Otaq yaradılarkən xəta baş verdi' });
   }
 });
@@ -101,31 +97,27 @@ app.post('/api/admin/login', async (req, res) => {
     }
     res.json({ ok: true, username: admin.username, isSuper: admin.is_super === 1 });
   } catch(e) {
-    console.error(e);
     res.status(500).json({ error: 'Daxil olarkən xəta baş verdi' });
   }
 });
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+app.delete('/api/rooms/:id', adminAuth, async (req, res) => {
+  try {
+    await db.run('DELETE FROM players WHERE room_id = ?', [req.params.id]);
+    await db.run('DELETE FROM cell_states WHERE room_id = ?', [req.params.id]);
+    await db.run('DELETE FROM rooms WHERE id = ?', [req.params.id]);
+    delete activeRooms[req.params.id];
+    delete playerProgress[req.params.id];
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Otağı silmək mümkün olmadı' });
+  }
+});
+
+// ─── Helpers ───
 function sanitizePuzzle(puzzle) {
   const grid = puzzle.grid.map(row => row.map(cell => cell === '#' ? '#' : ''));
   return { ...puzzle, grid, solution: undefined };
-}
-
-async function checkCompletion(roomId) {
-  const state = activeRooms[roomId];
-  if (!state || state.status !== 'playing') return false;
-  const { puzzle, cells } = state;
-  let correct = 0, total = 0;
-  for (let r = 0; r < puzzle.height; r++) {
-    for (let c = 0; c < puzzle.width; c++) {
-      const sol = puzzle.grid[r][c];
-      if (sol === '#') continue;
-      total++;
-      if (cells[r * puzzle.width + c] === sol) correct++;
-    }
-  }
-  return correct === total;
 }
 
 async function startGameForRoom(roomId) {
@@ -137,31 +129,44 @@ async function startGameForRoom(roomId) {
     const puzzle = puzzles.find(p => p.id === room.puzzle_id);
     if (!puzzle) return;
 
+    // Bütün sözlərin və xanaların ümumi sayını hesablayırıq
+    const totalWords = Object.keys(puzzle.cluesAcross || {}).length + Object.keys(puzzle.cluesDown || {}).length;
+    let totalCells = 0;
+    puzzle.grid.forEach(row => row.forEach(c => { if(c !== '#') totalCells++; }));
+
     await db.run('DELETE FROM cell_states WHERE room_id = ?', [room.id]);
     await db.run('UPDATE rooms SET status = ? WHERE id = ?', ['playing', room.id]);
     await db.run('UPDATE players SET score = 0, cells_filled = 0 WHERE room_id = ?', [room.id]);
 
-    activeRooms[room.id] = { puzzle, cells: new Array(puzzle.width * puzzle.height).fill(''), status: 'playing' };
-    io.to(room.id).emit('game_started', { puzzle: sanitizePuzzle(puzzle), cells: activeRooms[room.id].cells });
+    activeRooms[room.id] = { puzzle, totalWords, totalCells, startTime: Date.now(), status: 'playing' };
+    playerProgress[room.id] = {}; // Hər kəs üçün fərdi progress yaradırıq
+
+    io.to(room.id).emit('game_started', { puzzle: sanitizePuzzle(puzzle) });
   } catch (e) {
     console.error("Oyunu başladarkən xəta:", e);
   }
 }
 
-async function endGame(roomId, winnerId) {
+async function endGame(roomId, winnerUsername) {
   try {
     const state = activeRooms[roomId];
     if (!state) return;
     state.status = 'finished';
+    
+    const timeTaken = Math.floor((Date.now() - state.startTime) / 1000);
+    const m = Math.floor(timeTaken / 60).toString().padStart(2, '0');
+    const s = (timeTaken % 60).toString().padStart(2, '0');
+
     await db.run('UPDATE rooms SET status = ? WHERE id = ?', ['waiting', roomId]);
-    const scores = await db.all('SELECT username, score, cells_filled FROM players WHERE room_id = ? ORDER BY score DESC', [roomId]);
-    io.to(roomId).emit('game_over', { scores, winnerId });
+    const scores = await db.all('SELECT username, score FROM players WHERE room_id = ? ORDER BY score DESC', [roomId]);
+    
+    io.to(roomId).emit('game_over', { scores, winner: winnerUsername, time: `${m}:${s}` });
   } catch(e) {
     console.error("Oyunu bitirərkən xəta:", e);
   }
 }
 
-// ─── Socket.io ────────────────────────────────────────────────────────────────
+// ─── Socket.io ───
 io.on('connection', (socket) => {
   socket.on('join_room', async ({ roomId, username }) => {
     if (!username || !roomId) return;
@@ -181,25 +186,26 @@ io.on('connection', (socket) => {
       socket.join(roomId);
       socket.data = { roomId, username, playerId };
 
-      // Yaddaşın bərpası
-      if (room.status === 'playing' && !activeRooms[roomId]) {
-        const puzzle = loadBuiltinPuzzles().find(p => p.id === room.puzzle_id);
-        if (puzzle) {
-          const cells = new Array(puzzle.width * puzzle.height).fill('');
-          const saved = await db.all('SELECT cell_index, letter FROM cell_states WHERE room_id = ?', [roomId]);
-          saved.forEach(s => cells[s.cell_index] = s.letter);
-          activeRooms[roomId] = { puzzle, cells, status: 'playing' };
-        }
+      const state = activeRooms[roomId];
+      if (!playerProgress[roomId]) playerProgress[roomId] = {};
+      if (!playerProgress[roomId][username]) {
+        playerProgress[roomId][username] = { 
+          cells: state ? new Array(state.puzzle.width * state.puzzle.height).fill('') : [], 
+          correctWords: 0, 
+          lockedCells: [] 
+        };
       }
 
-      const state = activeRooms[roomId];
-      const players = await db.all('SELECT id, username, score, cells_filled FROM players WHERE room_id = ?', [roomId]);
+      const players = await db.all('SELECT id, username, score FROM players WHERE room_id = ?', [roomId]);
+      const myProgress = playerProgress[roomId][username];
       
       socket.emit('joined', {
         playerId, roomId, roomName: room.name, players,
         gameStatus: room.status,
         puzzle: state?.status === 'playing' ? sanitizePuzzle(state.puzzle) : null,
-        cells: state?.cells || []
+        cells: myProgress.cells,
+        lockedCells: myProgress.lockedCells,
+        totalWords: state ? state.totalWords : 0
       });
       socket.to(roomId).emit('player_joined', { id: playerId, username, score: existing ? existing.score : 0 });
     } catch (e) {
@@ -207,26 +213,38 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('fill_cell', async ({ cellIndex, letter }) => {
-    try {
-      const { roomId, username, playerId } = socket.data || {};
-      const state = activeRooms[roomId];
-      if (!state || state.status !== 'playing') return;
+  socket.on('check_word', async ({ wordIndexes, enteredWord, direction }) => {
+    const { roomId, username } = socket.data || {};
+    const state = activeRooms[roomId];
+    if (!state || state.status !== 'playing') return;
 
-      const upperLetter = (letter || '').toUpperCase().slice(0, 1);
-      state.cells[cellIndex] = upperLetter;
-      await db.run('INSERT OR REPLACE INTO cell_states (room_id, cell_index, letter, filled_by) VALUES (?, ?, ?, ?)', [roomId, cellIndex, upperLetter, username]);
+    // Əsl həlli yoxlayırıq
+    let correctWord = '';
+    wordIndexes.forEach(idx => {
+      const r = Math.floor(idx / state.puzzle.width);
+      const c = idx % state.puzzle.width;
+      correctWord += state.puzzle.grid[r][c];
+    });
 
-      const row = Math.floor(cellIndex / state.puzzle.width), col = cellIndex % state.puzzle.width;
-      const correct = state.puzzle.grid[row][col] === upperLetter;
-      if (correct) {
-        await db.run('UPDATE players SET score = score + 10, cells_filled = cells_filled + 1 WHERE id = ?', [playerId]);
+    if (enteredWord.toUpperCase() === correctWord.toUpperCase()) {
+      const progress = playerProgress[roomId][username];
+      progress.correctWords += 1;
+      
+      // Həmin sözün xanalarını kilidlənmiş kimi qeyd edirik
+      wordIndexes.forEach(idx => {
+        if (!progress.lockedCells.includes(idx)) progress.lockedCells.push(idx);
+      });
+
+      // Digər oyunçulara "Filankəs söz tapdı" statusunu göndəririk (sözü göstərmirik)
+      io.to(roomId).emit('player_progress_update', { username, wordsFound: progress.correctWords, totalWords: state.totalWords });
+      
+      // Bu oyunçuya "Söz düzdür, Yaşıl et!" əmri göndəririk
+      socket.emit('word_correct', { wordIndexes });
+
+      // Əgər bütün sözləri tapıbsa - Qalibdir!
+      if (progress.correctWords >= state.totalWords) {
+        await endGame(roomId, username);
       }
-
-      io.to(roomId).emit('cell_filled', { cellIndex, letter: upperLetter, byUsername: username, correct });
-      if (await checkCompletion(roomId)) await endGame(roomId, playerId);
-    } catch(e) {
-      console.error("Xana doldurularkən xəta:", e);
     }
   });
 
@@ -239,24 +257,8 @@ io.on('connection', (socket) => {
       io.to(socket.data.roomId).emit('chat_message', { username: socket.data.username, message: data.message.slice(0, 200) });
     }
   });
-
-  socket.on('disconnect', async () => {
-    try {
-      if (socket.data?.playerId) {
-        await db.run('UPDATE players SET socket_id = NULL WHERE id = ?', [socket.data.playerId]);
-      }
-    } catch(e) {
-      console.error("Disconnect xətası:", e);
-    }
-  });
 });
 
-// Front-end faylları
-app.get('/', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/game', (_, res) => res.sendFile(path.join(__dirname, 'public', 'game.html')));
-app.get('/admin', (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-
-// 🔴 DİQQƏT: 0.0.0.0 hissəsi Railway üçün məcburidir!
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`\n🚀 Krossword serveri onlayndır! Port: ${PORT}`);
+  console.log(`\n🚀 Yarış Serveri Onlayndır! Port: ${PORT}`);
 });

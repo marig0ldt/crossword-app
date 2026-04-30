@@ -167,7 +167,7 @@ async function loadRooms() {
     <td class="actions">
       ${r.status !== 'playing' ? `<button class="btn btn-sm btn-green" onclick="startGame('${r.id}')">Oyunu Başlat</button>` : `<button class="btn btn-sm btn-orange" onclick="endGame('${r.id}')">Oyunu Bitir</button>`}
       <button class="btn btn-sm" onclick="showPlayers('${r.id}',${JSON.stringify(r.players).replace(/"/g,'&quot;')})">Siyahı</button>
-      <button class="btn btn-sm btn-red" onclick="deleteRoom('${r.id}')">Sil</button>
+      <button class="btn btn-sm btn-red" style="background-color: #ff4d4d; color: white;" onclick="deleteRoom('${r.id}')">Sil</button>
     </td></tr>`).join('')}</tbody></table>`;
 }
 
@@ -200,8 +200,13 @@ async function endGame(id) {
 }
 
 async function deleteRoom(id) {
-  if (!confirm('Otağı silmək istəyirsiniz? Bütün iştirakçılar xaric ediləcək.')) return;
-  await fetch(`/api/rooms/${id}`, { method: 'DELETE', headers: getHeaders() });
+  if (!confirm('Diqqət: Bu otağı silmək istədiyinizə əminsiniz? Bütün iştirakçılar xaric ediləcək.')) return;
+  const res = await fetch(`/api/rooms/${id}`, { method: 'DELETE', headers: getHeaders() });
+  if (res.ok) {
+    alert('Otaq uğurla silindi!');
+  } else {
+    alert('Otağı silərkən xəta baş verdi.');
+  }
   loadRooms();
 }
 
@@ -211,11 +216,9 @@ async function loadPuzzles() {
   const res = await fetch('/api/puzzles');
   const puzzles = await res.json();
   
-  // Update Dropdown for room creation
   const sel = document.getElementById('new-room-puzzle');
   sel.innerHTML = puzzles.map(p => `<option value="${p.id}">${p.title}</option>`).join('');
   
-  // Update Table
   const el = document.getElementById('puzzles-table');
   el.innerHTML = `<table class="data-table"><thead><tr><th>ID</th><th>Başlıq</th><th>Müəllif</th><th>Ölçü</th></tr></thead><tbody>
   ${puzzles.map(p => `<tr><td><code>${p.id}</code></td><td>${p.title}</td><td>${p.author || '-'}</td><td>${p.width}×${p.height}</td></tr>`).join('')}</tbody></table>`;
