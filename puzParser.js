@@ -1,10 +1,10 @@
 const path = require('path');
 const bcrypt = require('bcryptjs');
-const db = new Database(path.join(__dirname, 'crossword.db'));
-db.pragma('journal_mode = WAL');
+
+
 
 // Tables
-db.exec(`
+(`
   CREATE TABLE IF NOT EXISTS admins (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
