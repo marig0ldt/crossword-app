@@ -1,3 +1,4 @@
+const db = require('./db');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
@@ -50,7 +51,7 @@ const bcrypt = require('bcryptjs');
 `);
 
 // Create default super admin if not exists
-const existingAdmin = db.prepare('SELECT id FROM admins WHERE username = ?').get('admin');
+
 if (!existingAdmin) {
   const hash = bcrypt.hashSync('admin123', 10);
   db.prepare('INSERT INTO admins (username, password_hash, is_super) VALUES (?, ?, 1)').run('admin', hash);
