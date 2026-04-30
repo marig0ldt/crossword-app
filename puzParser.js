@@ -1,58 +1,73 @@
-const db = require('./db');
-const path = require('path');
-const bcrypt = require('bcryptjs');
+// puzParser.js - Krossvord fayllarını oxumaq üçün təmiz parser
+function parsePuz(buffer) {
+  try {
+    // Krossvord faylının formatını yoxlayırıq
+    const magic = buffer.toString('latin1', 2, 14);
+    if (magic !== 'ACROSS&DOWN\0') {
+      console.warn("Yanlış .puz fayl formatı");
+      return null;
+    }
 
+    // Ölçüləri və sual sayını oxuyuruq
+    const width = buffer.readUInt8(0x2C);
+    const height = buffer.readUInt8(0x2D);
+    const numClues = buffer.readUInt16LE(0x2E);
 
+    // Həlləri oxuyuruq
+    const gridStart = 0x34;
+    const gridEnd = gridStart + (width * height);
+    const solutionString = buffer.toString('latin1', gridStart, gridEnd);
+    
+    const stateEnd = gridEnd + (width * height);
 
-// Tables
-(`
-  CREATE TABLE IF NOT EXISTS admins (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    is_super INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  CREATE TABLE IF NOT EXISTS rooms (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    puzzle_id TEXT NOT NULL,
-    status TEXT DEFAULT 'waiting',
-    max_players INTEGER DEFAULT 25,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  CREATE TABLE IF NOT EXISTS players (
-    id TEXT PRIMARY KEY,
-    room_id TEXT,
-    username TEXT NOT NULL,
-    socket_id TEXT,
-    score INTEGER DEFAULT 0,
-    cells_filled INTEGER DEFAULT 0,
-    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(room_id) REFERENCES rooms(id)
-  );
-  CREATE TABLE IF NOT EXISTS game_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    room_id TEXT NOT NULL,
-    puzzle_id TEXT NOT NULL,
-    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    ended_at DATETIME,
-    winner_id TEXT,
-    FOREIGN KEY(room_id) REFERENCES rooms(id)
-  );
-  CREATE TABLE IF NOT EXISTS cell_states (
-    room_id TEXT NOT NULL,
-    cell_index INTEGER NOT NULL,
-    letter TEXT,
-    filled_by TEXT,
-    filled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY(room_id, cell_index)
-  );
-`);
+    // Mətnləri (Başlıq, Müəllif və Suallar) oxuyan funksiya
+    let offset = stateEnd;
+    function readString() {
+      let end = offset;
+      while (end < buffer.length && buffer[end] !== 0x00) {
+        end++;
+      }
+      const str = buffer.toString('latin1', offset, end);
+      offset = end + 1; // null baytını keçirik
+      return str;
+    }
 
-// Create default super admin if not exists
+    const title = readString();
+    const author = readString();
+    const copyright = readString();
 
-if (!existingAdmin) {
+    // Sualları (clues) toplayırıq
+    const clues = [];
+    for (let i = 0; i < numClues; i++) {
+      clues.push(readString());
+    }
+
+    // 2D grid (cədvəl) yaradırıq
+    const grid = [];
+    for (let r = 0; r < height; r++) {
+      const row = [];
+      for (let c = 0; c < width; c++) {
+        let char = solutionString[r * width + c];
+        // .puz fayllarında qara xanalar '.' ilə işarələnir, onu '#' edirik ki oyunumuzla uyğun gəlsin
+        if (char === '.') char = '#'; 
+        row.push(char);
+      }
+      grid.push(row);
+    }
+
+    return {
+      title: title || "Başlıqsız",
+      author: author || "Naməlum",
+      width,
+      height,
+      grid,
+      clues
+    };
+  } catch (err) {
+    console.error(".puz faylını oxuyarkən xəta:", err);
+    return null;
+  }
 }
 
-module.exports = db;
+// Yalnız parsePuz funksiyasını serverə göndəririk
+module.exports = { parsePuz };
