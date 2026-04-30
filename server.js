@@ -258,6 +258,9 @@ io.on('connection', (socket) => {
     }
   });
 });
+app.get('/', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/game', (_, res) => res.sendFile(path.join(__dirname, 'public', 'game.html')));
+app.get('/admin', (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`\n🚀 Yarış Serveri Onlayndır! Port: ${PORT}`);
