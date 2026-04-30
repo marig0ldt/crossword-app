@@ -21,14 +21,25 @@
     ["#", "#", "#", "#", "#", "#", "#", "#", "#", "#", "#", "#", "#"],
     ["J", "E", "S", "T", "#", "#", "#", "#", "#", "#", "#", "#", "#"]
   ],
-  "clues": [
-    "1. Əlilliyi olan şəxslərin cəmiyyətə yenidən uyğunlaşma prosesi (reabilitasiya)",
-    "2. Səsləri duyduğumuz hissiyatımız (eşitmə)",
-    "3. Pilləkənlərin yanında təkərli kürsülər üçün düzəldilən maili yol (pandus)",
-    "4. İnsan hüquqlarını qoruyan şəxs və ya qurum (ombudsman)",
-    "5. Gözlərimizlə gördüyümüz müxtəlif çalarlar (rəng)",
-    "6. Hər bir uşağın məktəbdə oxumaq və bilik almaq hüququ (təhsil)",
-    "7. Bədənimizin ən vacib üzvü, yeriməyə kömək edən üzv (ayaq)",
-    "8. Eşitmə məhdudiyyəti olan şəxslərin əl hərəkəti ilə ünsiyyət forması (jest)"
-  ]
+  "cluesAcross": {
+    "1": "Əlilliyi olan şəxslərin cəmiyyətə yenidən uyğunlaşma prosesi",
+    "2": "Səsləri duyduğumuz hissiyatımız",
+    "3": "Pilləkənlərin yanında təkərli kürsülər üçün düzəldilən maili yol",
+    "4": "İnsan hüquqlarını qoruyan şəxs və ya qurum",
+    "5": "Gözlərimizlə gördüyümüz müxtəlif çalarlar",
+    "6": "Hər bir uşağın məktəbdə oxumaq və bilik almaq hüququ",
+    "7": "Bədənimizin ən vacib üzvü, yeriməyə kömək edən üzv",
+    "8": "Eşitmə məhdudiyyəti olan şəxslərin əl hərəkəti ilə ünsiyyət forması"
+  },
+  "cluesDown": {},
+  "numbers": {
+    "0,0": 1,
+    "2,0": 2,
+    "4,0": 3,
+    "6,0": 4,
+    "8,0": 5,
+    "10,0": 6,
+    "12,0": 7,
+    "14,0": 8
+  }
 }
